@@ -59,7 +59,7 @@ class MainActivity : Activity() {
 
     private fun showLogin() {
         setup("🌸 Sakura Manager")
-        val email = EditText(this).apply { hint = "Email"; singleLine = true }
+        val email = EditText(this).apply { hint = "Email"; setSingleLine(true) }
         val password = EditText(this).apply { hint = "Password"; inputType = 129; singleLine = true }
         root.addView(email)
         root.addView(password)
@@ -126,7 +126,7 @@ class MainActivity : Activity() {
                             textSize = 16f
                             setTextColor(Color.BLACK)
                             setPadding(10, 14, 10, 14)
-                            text = "${p.optString("name")}\nالسعر: ${p.optString("price")} | التكلفة: ${p.optString("cost")} | المخزون: ${p.optString("stock")}\n" + if (p.optBoolean("store_visible")) "ظاهر بالمتجر" else "مخفي"
+                            this.text = "${p.optString("name")}\nالسعر: ${p.optString("price")} | التكلفة: ${p.optString("cost")} | المخزون: ${p.optString("stock")}\n" + if (p.optBoolean("store_visible")) "ظاهر بالمتجر" else "مخفي"
                         }
                         list.addView(row)
                         list.addView(View(this@MainActivity).apply { setBackgroundColor(Color.LTGRAY) }, LinearLayout.LayoutParams(-1, 1))
@@ -153,7 +153,7 @@ class MainActivity : Activity() {
                         row.addView(TextView(this@MainActivity).apply {
                             textSize = 16f
                             setTextColor(Color.BLACK)
-                            text = "طلب ${order.optString("id")}\n${order.optString("customer_name")} | ${order.optString("phone")}\n${order.optString("total")} ج.م | الحالة: ${order.optString("status")}"
+                            this.text = "طلب ${order.optString("id")}\n${order.optString("customer_name")} | ${order.optString("phone")}\n${order.optString("total")} ج.م | الحالة: ${order.optString("status")}"
                         })
                         val actions = LinearLayout(this@MainActivity)
                         row.addView(actions)
