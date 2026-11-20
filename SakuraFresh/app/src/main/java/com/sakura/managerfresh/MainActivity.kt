@@ -7,32 +7,176 @@ import android.view.Gravity
 import android.view.View
 import android.widget.*
 import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 
-
 class MainActivity : Activity() {
- private val supabaseUrl="https://qumtsbxysauhujggdqjk.supabase.co"
- private val anonKey="sb_publishable_GaWDWm3CXY_p1I45hWohbQ_qIux32ow"
- private val client=OkHttpClient()
- private var token:String?=null
- private lateinit var root:LinearLayout
- private lateinit var status:TextView
- private fun req(path:String, method:String="GET", body:String?=null, auth:String?=token):Request {
-  val b=Request.Builder().url(supabaseUrl+path).header("apikey",anonKey).header("Authorization","Bearer "+(auth?:anonKey))
-  if(body!=null) b.header("Content-Type","application/json").method(method,body.toRequestBodyCompat()) else b.method(method,null)
-  return b.build()
- }
- private fun String.toRequestBodyCompat()=RequestBody.create(MediaType.parse("application/json; charset=utf-8"),this)
- override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState); showLogin()}
- private fun base(title:String){ root=LinearLayout(this).apply{orientation=1;setPadding(28,24,28,24);setBackgroundColor(Color.rgb(255,246,249))}; val t=TextView(this).apply{text=title; textSize=24f;setTextColor(Color.rgb(158,48,91));gravity=Gravity.CENTER;setPadding(0,10,0,22)};root.addView(t); status=TextView(this).apply{textSize=14f;setTextColor(Color.DKGRAY)};root.addView(status);setContentView(root) }
- private fun showLogin(){base("🌸 Sakura Manager");val email=EditText(this).apply{hint="Email"};val pass=EditText(this).apply{hint="Password";inputType=129};root.addView(email);root.addView(pass);val btn=Button(this).apply{text="Login"};root.addView(btn);btn.setOnClickListener{status.text="جاري تسجيل الدخول…";login(email.text.toString(),pass.text.toString())} }
- private fun login(e:String,p:String){val payload=JSONObject().put("email",e).put("password",p).toString();val request=req("/auth/v1/token?grant_type=password","POST",payload,anonKey);client.newCall(request).enqueue(object:Callback{override fun onFailure(c:Call,x:IOException){runOnUiThread{status.text="تعذر الاتصال: "+x.message}};override fun onResponse(c:Call,r:Response){val s=r.body()?.string().orEmpty();if(r.isSuccessful){token=JSONObject(s).optString("access_token");runOnUiThread{home()}}else runOnUiThread{status.text="Login failed: $s"}}})}
- private fun home(){base("🌸 Sakura Manager");val bar=LinearLayout(this);bar.orientation=0;root.addView(bar);button(bar,"المنتجات"){loadProducts()};button(bar,"الطلبات"){loadOrders()};button(bar,"خروج"){token=null;showLogin()};loadProducts()}
- private fun button(parent:LinearLayout,label:String,action:()->Unit){val b=Button(this).apply{text=label};parent.addView(b,LinearLayout.LayoutParams(0,-2,1f));b.setOnClickListener{action()}}
- private fun listScreen(title:String): LinearLayout {base(title);val scroll=ScrollView(this);val list=LinearLayout(this).apply{orientation=1};scroll.addView(list);root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f));return list}
- private fun loadProducts(){val list=listScreen("المنتجات والمخزون");status.text="تحميل…";client.newCall(req("/rest/v1/products?select=id,name,price,cost,stock,active,store_visible&order=sort_order.asc")).enqueue(object:Callback{override fun onFailure(c:Call,e:IOException){runOnUiThread{status.text=e.message}};override fun onResponse(c:Call,r:Response){val s=r.body()?.string().orEmpty();runOnUiThread{if(!r.isSuccessful){status.text="خطأ: $s";return@runOnUiThread};val a=JSONArray(s);status.text="عدد المنتجات: "+a.length();for(i in 0 until a.length()){val p=a.getJSONObject(i);val row=TextView(this@MainActivity).apply{textSize=16f;setTextColor(Color.BLACK);setPadding(8,12,8,12);text=p.optString("name")+"\nالسعر: "+p.optString("price")+" | التكلفة: "+p.optString("cost")+" | المخزون: "+p.optString("stock")+if(p.optBoolean("store_visible"))"\nظاهر بالمتجر" else "\nمخفي"};list.addView(row);list.addView(View(this@MainActivity).apply{setBackgroundColor(Color.LTGRAY)} ,LinearLayout.LayoutParams(-1,1))}}})}
- private fun loadOrders(){val list=listScreen("الطلبات");status.text="تحميل الطلبات…";client.newCall(req("/rest/v1/orders?select=*&order=created_at.desc")).enqueue(object:Callback{override fun onFailure(c:Call,e:IOException){runOnUiThread{status.text=e.message}};override fun onResponse(c:Call,r:Response){val s=r.body()?.string().orEmpty();runOnUiThread{if(!r.isSuccessful){status.text="خطأ: $s";return@runOnUiThread};val a=JSONArray(s);status.text="عدد الطلبات: "+a.length();for(i in 0 until a.length()){val o=a.getJSONObject(i);val row=LinearLayout(this@MainActivity).apply{orientation=1;setPadding(12,14,12,14)};row.addView(TextView(this@MainActivity).apply{textSize=17f;setTextColor(Color.BLACK);text="طلب "+o.optString("id")+"\n"+o.optString("customer_name")+" | "+o.optString("phone")+"\n"+o.optString("total")+" ج.م | الحالة: "+o.optString("status")});val actions=LinearLayout(this@MainActivity);row.addView(actions);if(o.optString("status")=="new")button(actions,"تأكيد") {setOrderStatus(o.optString("id"),"confirmed")};button(actions,"إلغاء") {setOrderStatus(o.optString("id"),"cancelled")};list.addView(row)}}})}
- private fun setOrderStatus(id:String,state:String){val payload=JSONObject().put("p_order_id",id).put("p_status",state).toString();client.newCall(req("/rest/v1/rpc/set_store_order_status","POST",payload)).enqueue(object:Callback{override fun onFailure(c:Call,e:IOException){runOnUiThread{status.text=e.message}};override fun onResponse(c:Call,r:Response){val s=r.body()?.string().orEmpty();runOnUiThread{status.text=if(r.isSuccessful)"تم تحديث الطلب والمخزون" else "فشل: $s";loadOrders()}}})}
+    private val baseUrl = "https://qumtsbxysauhujggdqjk.supabase.co"
+    private val anonKey = "sb_publishable_GaWDWm3CXY_p1I45hWohbQ_qIux32ow"
+    private val http = OkHttpClient()
+    private var accessToken: String? = null
+    private lateinit var root: LinearLayout
+    private lateinit var status: TextView
+
+    private fun request(path: String, method: String = "GET", json: String? = null): Request {
+        val builder = Request.Builder()
+            .url(baseUrl + path)
+            .header("apikey", anonKey)
+            .header("Authorization", "Bearer " + (accessToken ?: anonKey))
+        if (json != null) {
+            builder.header("Content-Type", "application/json")
+                .method(method, json.toRequestBody("application/json; charset=utf-8".toMediaType()))
+        } else builder.method(method, null)
+        return builder.build()
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        showLogin()
+    }
+
+    private fun setup(title: String) {
+        root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 20, 24, 20)
+            setBackgroundColor(Color.rgb(255, 246, 249))
+        }
+        val heading = TextView(this).apply {
+            text = title
+            textSize = 24f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(158, 48, 91))
+            setPadding(0, 8, 0, 20)
+        }
+        root.addView(heading)
+        status = TextView(this).apply { textSize = 14f; setTextColor(Color.DKGRAY) }
+        root.addView(status)
+        setContentView(root)
+    }
+
+    private fun showLogin() {
+        setup("🌸 Sakura Manager")
+        val email = EditText(this).apply { hint = "Email"; singleLine = true }
+        val password = EditText(this).apply { hint = "Password"; inputType = 129; singleLine = true }
+        root.addView(email)
+        root.addView(password)
+        val loginButton = Button(this).apply { text = "Login" }
+        root.addView(loginButton)
+        loginButton.setOnClickListener {
+            status.text = "جاري تسجيل الدخول..."
+            val payload = JSONObject().put("email", email.text.toString()).put("password", password.text.toString()).toString()
+            val req = Request.Builder().url("$baseUrl/auth/v1/token?grant_type=password")
+                .header("apikey", anonKey).header("Authorization", "Bearer $anonKey")
+                .post(payload.toRequestBody("application/json; charset=utf-8".toMediaType())).build()
+            http.newCall(req).enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) { runOnUiThread { status.text = "تعذر الاتصال: ${e.message}" } }
+                override fun onResponse(call: Call, response: Response) {
+                    val text = response.body?.string().orEmpty()
+                    if (response.isSuccessful) {
+                        accessToken = JSONObject(text).optString("access_token")
+                        runOnUiThread { home() }
+                    } else runOnUiThread { status.text = "فشل الدخول: $text" }
+                }
+            })
+        }
+    }
+
+    private fun home() {
+        setup("🌸 Sakura Manager")
+        val menu = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        root.addView(menu)
+        addButton(menu, "المنتجات") { loadProducts() }
+        addButton(menu, "الطلبات") { loadOrders() }
+        addButton(menu, "خروج") { accessToken = null; showLogin() }
+        loadProducts()
+    }
+
+    private fun addButton(parent: LinearLayout, label: String, action: () -> Unit) {
+        val button = Button(this).apply { text = label }
+        parent.addView(button, LinearLayout.LayoutParams(0, -2, 1f))
+        button.setOnClickListener { action() }
+    }
+
+    private fun contentList(title: String): LinearLayout {
+        setup(title)
+        val scroll = ScrollView(this)
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scroll.addView(list)
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        return list
+    }
+
+    private fun loadProducts() {
+        val list = contentList("المنتجات والمخزون")
+        status.text = "تحميل المنتجات..."
+        http.newCall(request("/rest/v1/products?select=id,name,price,cost,stock,active,store_visible&order=name.asc")).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) { runOnUiThread { status.text = e.message ?: "خطأ اتصال" } }
+            override fun onResponse(call: Call, response: Response) {
+                val text = response.body?.string().orEmpty()
+                runOnUiThread {
+                    if (!response.isSuccessful) { status.text = "خطأ: $text"; return@runOnUiThread }
+                    val arr = JSONArray(text)
+                    status.text = "عدد المنتجات: ${arr.length()}"
+                    for (i in 0 until arr.length()) {
+                        val p = arr.getJSONObject(i)
+                        val row = TextView(this@MainActivity).apply {
+                            textSize = 16f
+                            setTextColor(Color.BLACK)
+                            setPadding(10, 14, 10, 14)
+                            text = "${p.optString("name")}\nالسعر: ${p.optString("price")} | التكلفة: ${p.optString("cost")} | المخزون: ${p.optString("stock")}\n" + if (p.optBoolean("store_visible")) "ظاهر بالمتجر" else "مخفي"
+                        }
+                        list.addView(row)
+                        list.addView(View(this@MainActivity).apply { setBackgroundColor(Color.LTGRAY }, LinearLayout.LayoutParams(-1, 1))
+                    }
+                }
+            }
+        })
+    }
+
+    private fun loadOrders() {
+        val list = contentList("طلبات المتجر")
+        status.text = "تحميل الطلبات..."
+        http.newCall(request("/rest/v1/orders?select=*&order=created_at.desc")).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) { runOnUiThread { status.text = e.message ?: "خطأ اتصال" } }
+            override fun onResponse(call: Call, response: Response) {
+                val text = response.body?.string().orEmpty()
+                runOnUiThread {
+                    if (!response.isSuccessful) { status.text = "خطأ: $text"; return@runOnUiThread }
+                    val arr = JSONArray(text)
+                    status.text = "عدد الطلبات: ${arr.length()}"
+                    for (i in 0 until arr.length()) {
+                        val order = arr.getJSONObject(i)
+                        val row = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 12, 12, 12) }
+                        row.addView(TextView(this@MainActivity).apply {
+                            textSize = 16f
+                            setTextColor(Color.BLACK)
+                            text = "طلب ${order.optString("id")}\n${order.optString("customer_name")} | ${order.optString("phone")}\n${order.optString("total")} ج.م | الحالة: ${order.optString("status")}"
+                        })
+                        val actions = LinearLayout(this@MainActivity)
+                        row.addView(actions)
+                        if (order.optString("status") == "new") addButton(actions, "تأكيد") { updateOrder(order.optString("id"), "confirmed") }
+                        addButton(actions, "إلغاء") { updateOrder(order.optString("id"), "cancelled") }
+                        list.addView(row)
+                    }
+                }
+            }
+        })
+    }
+
+    private fun updateOrder(id: String, state: String) {
+        val payload = JSONObject().put("p_order_id", id).put("p_status", state).toString()
+        http.newCall(request("/rest/v1/rpc/set_store_order_status", "POST", payload)).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) { runOnUiThread { status.text = e.message ?: "فشل التحديث" } }
+            override fun onResponse(call: Call, response: Response) {
+                val text = response.body?.string().orEmpty()
+                runOnUiThread {
+                    status.text = if (response.isSuccessful) "تم تحديث حالة الطلب والمخزون" else "فشل التحديث: $text"
+                    loadOrders()
+                }
+            }
+        })
+    }
 }
