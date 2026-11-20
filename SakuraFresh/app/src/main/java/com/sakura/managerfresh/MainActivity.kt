@@ -129,7 +129,7 @@ class MainActivity : Activity() {
                             text = "${p.optString("name")}\nالسعر: ${p.optString("price")} | التكلفة: ${p.optString("cost")} | المخزون: ${p.optString("stock")}\n" + if (p.optBoolean("store_visible")) "ظاهر بالمتجر" else "مخفي"
                         }
                         list.addView(row)
-                        list.addView(View(this@MainActivity).apply { setBackgroundColor(Color.LTGRAY }, LinearLayout.LayoutParams(-1, 1))
+                        list.addView(View(this@MainActivity).apply { setBackgroundColor(Color.LTGRAY) }, LinearLayout.LayoutParams(-1, 1))
                     }
                 }
             }
