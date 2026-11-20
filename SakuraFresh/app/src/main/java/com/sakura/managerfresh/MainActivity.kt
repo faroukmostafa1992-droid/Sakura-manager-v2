@@ -60,7 +60,7 @@ class MainActivity : Activity() {
     private fun showLogin() {
         setup("🌸 Sakura Manager")
         val email = EditText(this).apply { hint = "Email"; setSingleLine(true) }
-        val password = EditText(this).apply { hint = "Password"; inputType = 129; singleLine = true }
+        val password = EditText(this).apply { hint = "Password"; inputType = 129; setSingleLine(true) }
         root.addView(email)
         root.addView(password)
         val loginButton = Button(this).apply { text = "Login" }
